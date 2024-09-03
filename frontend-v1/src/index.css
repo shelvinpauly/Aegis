@@ -1,0 +1,19 @@
+html,
+body,
+#root {
+  height: 100%;
+  font-size: 14px;
+  font-family: 'Roboto', 'Open Sans', 'Helvetica Neue', 'Montserrat', 'Lato', sans-serif;
+  margin: 0;
+}
+/* Primary Palette (Dark Mode):
+Primary: #000080 (Dark Navy Blue)
+Secondary: #663399 (Purple)
+Tertiary: #f0f0f0 (Light Gray)
+Accent: #ff9900 (Orange)
+
+Primary Palette (Light Mode):
+Primary: #f0f0f0 (Light Gray)
+Secondary: #663399 (Purple)
+Tertiary: #000080 (Dark Navy Blue)
+Accent: #ff9900 (Orange) */
