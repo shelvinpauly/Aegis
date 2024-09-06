@@ -18,8 +18,8 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login setIsLoggedIn={setIsLoggedIn} />} />
-        <Route path="/app" element={isLoggedIn ? <Agent /> : <Navigate to="/login" replace />} />
-        <Route path="/" element={isLoggedIn ? <Agent /> : <Navigate to="/login" replace />} />
+        <Route path="/app" element={isLoggedIn ? <Agent setIsLoggedIn={setIsLoggedIn}/> : <Navigate to="/login" replace />} />
+        <Route path="/" element={isLoggedIn ? <Agent setIsLoggedIn={setIsLoggedIn}/> : <Navigate to="/login" replace />} />
       </Routes>
     </BrowserRouter>
   );
