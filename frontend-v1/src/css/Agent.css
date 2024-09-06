@@ -52,9 +52,10 @@
 
 .left-panel_chat-history {
   flex: 0.8;
-  font-size: 15px;
+  font-size: 18px;
   font-weight: 600;
   display: flex;
+  align-items: center;
   flex-direction: column;
   background-color: #282c34;
   color: #dfe1e5;
@@ -88,6 +89,12 @@
 .chat-window {
   flex: 1;
   margin-top: 10px;
+}
+
+.chat-logo {
+  position: relative;
+  top: -50px;
+  left: -40px;
 }
 
 .bot-message {

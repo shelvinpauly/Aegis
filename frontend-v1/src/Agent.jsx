@@ -79,6 +79,8 @@ function App( {setIsLoggedIn} ) {
   
       setIsLoggedIn(false);
       // Show a temporary message (optional)
+
+      // move this to App.jsx
       alert("Logout successful!");
     }
   };
@@ -97,7 +99,6 @@ function App( {setIsLoggedIn} ) {
               <button>Guide</button>
               <button onClick={handleLogout}>Logout</button>
             </div>
-            
             <div className="left-panel_chat-history">
               Chats
             </div>
@@ -105,22 +106,22 @@ function App( {setIsLoggedIn} ) {
           <div className="app-container">          
             <div className="top-bar">
               <h1>Aegis</h1>
-              {/* <img src={logo} alt="Aegis Logo" width="75" height="75"></img> */}
+              <img src={logo} alt="Aegis Logo" width="75" height="75"></img>
               <div className="copyright">
-                &copy; InterSources Inc 2024
+                &copy; <a href="https://www.intersourcesinc.com/page-about-1" target="_blank" rel="noopener noreferrer" style={{ color: 'inherit'}}>InterSources Inc 2024</a>
               </div>
             </div>
             <div className="chat-window">
-            <img src={logo} alt="Aegis Logo" width="25" height="25"></img>
               <div className="bot-message">
                 Hi I am Aegis, your personal AI cybersecurity auditor. Lets start reviewing your IT infrastructure first. Tell me which industry does your company belong to ?
               </div>
+              <img src={logo} alt="Aegis Logo" width="25" height="25" className="chat-logo"></img>
               {/* <div className="spotlight__answer">
                 {answer && <p>{answer}</p>}
                 </div> */}
             </div>
             <div className="input-div">
-              <div className="cautionary-message">Aegis may display inaccurate info, so double-check its responses.</div>
+              <div className="cautionary-message">Aegis provides AI-powered assistance. While we strive for accuracy, it's always a good idea to verify information from multiple sources.</div>
               <input type="text" className="spotlight__input" placeholder="Please provide your input/questions here..."
                   onChange={(e) => updatePrompt(e.target.value)} onKeyDown={(e) => sendPrompt(e)}
                   disabled={loading} />
