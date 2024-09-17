@@ -24,5 +24,4 @@ jobs:
       - name: Run Flask Server
         run: |
           cd flask-server
-          python sever.py &
-        continue-on-error: true
+          python sever.py
