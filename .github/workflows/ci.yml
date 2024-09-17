@@ -1,4 +1,4 @@
-name: Build and Run Backend & Frontend
+name: Build and Run Backend
 
 on: [push, pull_request]
 
