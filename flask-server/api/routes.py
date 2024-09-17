@@ -1,30 +1,26 @@
-from flask import Flask, request, jsonify
+from flask import Blueprint, request, jsonify
 from flask_cors import CORS
 
-app = Flask(__name__)
-cors = CORS(app, origins='*')
+# Create a Blueprint for the API routes
+api = Blueprint('api', __name__)
+cors = CORS(api, origins='*')
 
-@app.route("/api/ask", methods=["POST"])
+@api.route("/api/ask", methods=["POST"])
 def answer_prompt():
-  # Get the prompt sent from the React frontend
-  data = request.get_json()
-  if not data:
-    return jsonify({"error": "Missing prompt in request body"}), 400
+    # Get the prompt sent from the React frontend
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Missing prompt in request body"}), 400
 
-  #LLM processing
+    # LLM processing
 
-  # Return the answer as JSON
-  return jsonify({"message": "received"})
+    # Return the answer as JSON
+    return jsonify({"message": "received"})
 
-@app.route('/handle-query', methods=['POST'])
+@api.route('/handle-query', methods=['POST'])
 def handle_query():
-  # handles embedding the user's question,
-  # finding relevant context from the vector database,
-  # building the prompt for the LLM,
-  # and sending the prompt to the LLM's API to get an answer.
-  pass
-
-if __name__ == "__main__":
-  app.run(debug=True, port=8080)
-
-  # google sheet - problems face
+    # handles embedding the user's question,
+    # finding relevant context from the vector database,
+    # building the prompt for the LLM,
+    # and sending the prompt to the LLM's API to get an answer.
+    pass

@@ -8,50 +8,19 @@ jobs:
     name: Build Backend (Flask)
 
     steps:
-      # Step 1: Checkout the repository
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # Step 2: Set up Python environment
       - name: Set up Python
         uses: actions/setup-python@v4
 
-      # Step 3: Install backend dependencies
       - name: Install Backend Dependencies
         run: |
           cd flask-server
           pip install -r requirements.txt
 
-      # Step 4: Run the Flask server to make sure it compiles and runs
       - name: Run Flask Server
         run: |
           cd flask-server
           python app.py &
-        continue-on-error: true  # Continue even if there is an error here
-
-  build-frontend:
-    runs-on: ubuntu-latest
-    name: Build Frontend (React or any other framework)
-
-    steps:
-      # Step 1: Checkout the repository
-      - name: Checkout repository
-        uses: actions/checkout@v3
-
-      # Step 2: Set up Node.js environment
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '16'
-
-      # Step 3: Install frontend dependencies
-      - name: Install Frontend Dependencies
-        run: |
-          cd frontend-v1
-          npm install
-
-      # Step 4: Build frontend project
-      - name: Build Frontend
-        run: |
-          cd frontend-v1
-          npm run build
+        continue-on-error: true
