@@ -1,6 +1,9 @@
 name: Build and Run Backend & Frontend
 
-on: [push, pull_request]
+on:
+    push:
+        branches:
+            - master
 
 jobs:
   build-backend:
