@@ -1,1 +1,1 @@
-AI cybersec bot
+AI cybersecurity bot
