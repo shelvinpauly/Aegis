@@ -35,23 +35,19 @@ jobs:
     name: Build Frontend
 
     steps:
-      # Step 1: Checkout the repository
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # Step 2: Set up Node.js environment
       - name: Set up Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: '16'
+          node-version: '20.16.0'
 
-      # Step 3: Install frontend dependencies
       - name: Install Frontend Dependencies
         run: |
           cd frontend-v1
           npm install
 
-      # Step 4: Build frontend project
       - name: Build Frontend
         run: |
           cd frontend-v1
