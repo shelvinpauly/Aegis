@@ -8,33 +8,31 @@ on:
 jobs:
   build-backend:
     runs-on: ubuntu-latest
-    name: Build Backend (Flask)
+    name: Build Backend
 
     steps:
-      # Step 1: Checkout the repository
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # Step 2: Set up Python environment
       - name: Set up Python
         uses: actions/setup-python@v4
+        with:
+          python-version: '3.10.12'
 
-      # Step 3: Install backend dependencies
       - name: Install Backend Dependencies
         run: |
           cd flask-server
           pip install -r requirements.txt
 
-      # Step 4: Run the Flask server to make sure it compiles and runs
-      - name: Run Flask Server
+      - name: Run Server Script
         run: |
-          cd flask-server
-          python app.py &
-        continue-on-error: true  # Continue even if there is an error here
+            cd flask-server
+            python -m py_compile server.py
+            python -c 'import server'
 
   build-frontend:
     runs-on: ubuntu-latest
-    name: Build Frontend (React or any other framework)
+    name: Build Frontend
 
     steps:
       # Step 1: Checkout the repository
