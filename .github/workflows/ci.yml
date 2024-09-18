@@ -21,7 +21,7 @@ jobs:
           cd flask-server
           pip install -r requirements.txt
 
-      - name: Lint and Run Server Script
+      - name: Run Server Script
         run: |
             cd flask-server
             python -m py_compile server.py
