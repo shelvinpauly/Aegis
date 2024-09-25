@@ -1,41 +1,15 @@
-import os
-from langchain_groq import ChatGroq
-from langchain_community.embeddings import OllamaEmbeddings
-from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_core.prompts import ChatPromptTemplate
 from langchain.chains import create_retrieval_chain
-from langchain_community.vectorstores import FAISS
-from langchain_community.document_loaders import PyPDFDirectoryLoader
-import backoff
 import tiktoken
-import redis
+from ollama_embedding_service.embedding_service import EmbeddingsService
+from llm.model import ChatAgent
 
 class RAG:
-    def __init__(self, groq_api_key, redis_client):
-        self.groq_api_key = groq_api_key
-        self.redis_client = redis_client
-        self.llm = self.create_llm()
-        self.vectors = self.load_or_create_embeddings()
-
-    @backoff.on_exception(backoff.expo, Exception, max_tries=5)
-    def create_llm(self):
-        return ChatGroq(groq_api_key=self.groq_api_key, model_name="Llama-3.1-70b-Versatile")
-
-    def load_or_create_embeddings(self):
-        embeddings_file = "faiss_index"
-        if os.path.exists(embeddings_file):
-            embeddings = OllamaEmbeddings()
-            vectors = FAISS.load_local(embeddings_file, embeddings, allow_dangerous_deserialization=True)
-        else:
-            embeddings = OllamaEmbeddings()
-            loader = PyPDFDirectoryLoader("./ISO")
-            docs = loader.load()
-            text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-            final_documents = text_splitter.split_documents(docs[:20])
-            vectors = FAISS.from_documents(final_documents, embeddings)
-            vectors.save_local(embeddings_file)
-        return vectors
+    def __init__(self, username, embeddings_file="faiss_index", pdf_directory="./ISO"):
+        self.chat_agent = ChatAgent(username)
+        self.embedding_service = EmbeddingsService(embeddings_file, pdf_directory)
+        self.vectors = self.embedding_service.load_or_create_embeddings()
 
     def get_prompt_with_history(self, history, questions_asked):
         conversation_history = "\n".join([f"User: {chat['question']}\nChatbot: {chat['answer']}" for chat in history])
@@ -96,27 +70,23 @@ class RAG:
         num_tokens = len(encoding.encode(string))
         return num_tokens
 
-    def get_conversation_history(self, session_id):
-        history = self.redis_client.lrange(session_id, 0, -1)
-        return [eval(item) for item in history]
-
-    def store_chat_history(self, session_id, question, answer):
-        self.redis_client.lpush(session_id, str({"question": question, "answer": answer}))
-
     def generate_response(self, prompt, session_id):
-        conversation_history = self.get_conversation_history(session_id)
-        questions_asked = len([chat for chat in conversation_history if chat["question"]])
+        # Use ChatAgent's method to get conversation history
+        conversation_history = self.chat_agent.get_session_history(session_id)
+        questions_asked = len([chat for chat in conversation_history.messages if chat.type == "human"])
         
-        prompt_template = self.get_prompt_with_history(conversation_history, questions_asked)
-        document_chain = create_stuff_documents_chain(self.llm, prompt_template)
+        prompt_template = self.get_prompt_with_history(conversation_history.messages, questions_asked)
+        document_chain = create_stuff_documents_chain(self.chat_agent.model, prompt_template)
         retriever = self.vectors.as_retriever()
         retrieval_chain = create_retrieval_chain(retriever, document_chain)
         
         try:
-            response = retrieval_chain.invoke({'input': prompt, 'context': str(conversation_history)})
+            response = retrieval_chain.invoke({'input': prompt, 'context': str(conversation_history.messages)})
             reply = response['answer']
             
-            self.store_chat_history(session_id, prompt, reply)
+            # Use ChatAgent's method to store chat history
+            self.chat_agent.store_chat_history(session_id, f"User: {prompt}")
+            self.chat_agent.store_chat_history(session_id, f"Bot: {reply}")
             
             return reply, self.num_tokens_from_string(reply)
         except Exception as e:
@@ -124,3 +94,18 @@ class RAG:
                 return None, 0
             else:
                 raise e
+
+# Example usage
+# if __name__ == "__main__":
+#     rag = RAG("admin")
+#     session_id = "user_session_1"
+    
+#     while True:
+#         user_input = rag.chat_agent.get_user_input("Enter your prompt (or type 'exit' to quit): ")
+        
+#         if user_input.lower() == "exit":
+#             print("Ending conversation. Goodbye!")
+#             break
+        
+#         response, _ = rag.generate_response(user_input, session_id)
+#         print(response)
