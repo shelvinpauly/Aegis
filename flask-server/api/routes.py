@@ -1,4 +1,5 @@
 from flask import Blueprint, request, jsonify
+# from .auth import register_user, login_user
 from flask_cors import CORS
 
 # Create a Blueprint for the API routes
@@ -24,3 +25,16 @@ def handle_query():
     # building the prompt for the LLM,
     # and sending the prompt to the LLM's API to get an answer.
     pass
+
+# @app.route('/register', methods=['POST'])
+# def register():
+#     data = request.json
+#     register_user(data['username'], data['password'])
+#     return {'message': 'User registered successfully'}
+
+# @app.route('/login', methods=['POST'])
+# def login():
+#     data = request.json
+#     if login_user(data['username'], data['password']):
+#         return {'message': 'Login successful'}
+#     return {'message': 'Invalid credentials'}, 401
