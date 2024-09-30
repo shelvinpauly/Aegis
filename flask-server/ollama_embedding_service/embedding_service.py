@@ -7,7 +7,7 @@ from langchain.document_loaders import PyPDFDirectoryLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 class EmbeddingsService:
-    def __init__(self, embeddings_file="faiss_index", pdf_directory="./ISO"):
+    def __init__(self, embeddings_file="attention_index", pdf_directory="./Attention"):
         self.embeddings_file = embeddings_file
         self.pdf_directory = pdf_directory
         self.embeddings = OllamaEmbeddings()
