@@ -16,7 +16,7 @@ class ChatAgent:
 
         # Initialize connection to PostgreSQL
         self.conn = psycopg2.connect(
-            dbname="aegis_auth",
+            dbname="aegis_db",
             user="aegis",
             password="aegis_pwd",
             host="localhost",
@@ -120,12 +120,45 @@ class ChatAgent:
         self.store_chat_history(session_id, f"Bot: {response_content}")
 
         return response_content
+    
+    def fetch_chat_history_from_redis(self, session_id):
+        # Fetch all messages from Redis (list) for the given session_id
+        chat_history = self.redis_client.lrange(session_id, 0, -1)
+        
+        return '\n'.join(chat_history)
+    
+    def store_session_in_db(self, session_id, username):
+        # Fetch chat history from Redis
+        chat_history = self.fetch_chat_history_from_redis(session_id)
+        
+        # Insert the chat history into the PostgreSQL table
+        self.cursor.execute("""
+            INSERT INTO chat_history.sessions (session_id, username, chat_history)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (session_id) 
+            DO UPDATE SET 
+                chat_history = EXCLUDED.chat_history,
+                updated_at = NOW();
+        """, (session_id, username, chat_history))
+        
+        # Commit the transaction
+        self.conn.commit()
+        
+        # Deletes the session from Redis after storing in PostgreSQL
+        self.redis_client.delete(session_id)
+
+    def mark_session_inactive(self, session_id, username):
+        # Store the session history in PostgreSQL
+        self.store_session_in_db(session_id, username)
+        
+        print(f"Session {session_id} for user {username} has been stored in PostgreSQL and removed from Redis.")
+
 
 # Initialize ChatAgent with username
 agent = ChatAgent("admin")
 
 # Loop to hold the conversation
-session_id = "user_session_1"  # You can use a unique ID for different sessions
+session_id = "1"  # You can use a unique ID for different sessions
 while True:
     user_input = agent.get_user_input("Enter your prompt (or type 'exit' to quit): ")
     
@@ -137,3 +170,4 @@ while True:
     # Process user input and generate response
     response = agent.process_user_input(user_input, session_id=session_id)
     print(response)
+agent.mark_session_inactive(session_id, "admin")

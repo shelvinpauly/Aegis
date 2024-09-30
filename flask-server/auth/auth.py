@@ -1,7 +1,7 @@
 # auth.py
-from .db import get_db_connection
-from .models import User
-from .utils import hash_password, verify_password
+from DB.db import get_db_connection
+from llm.model import User
+from utils.helper_functions import hash_password, verify_password
 
 def register_user(username, password):
     hashed_password = hash_password(password)
