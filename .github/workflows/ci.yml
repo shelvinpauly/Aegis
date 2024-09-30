@@ -1,14 +1,11 @@
-name: Build and Run Backend & Frontend
+name: Build and Run Backend
 
-on:
-    push:
-        branches:
-            - master
+on: [push, pull_request]
 
 jobs:
   build-backend:
     runs-on: ubuntu-latest
-    name: Build Backend
+    name: Build Backend (Flask)
 
     steps:
       - name: Checkout repository
@@ -29,26 +26,3 @@ jobs:
             cd flask-server
             python -m py_compile server.py
             python -c 'import server'
-
-  build-frontend:
-    runs-on: ubuntu-latest
-    name: Build Frontend
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '20.16.0'
-
-      - name: Install Frontend Dependencies
-        run: |
-          cd frontend-v1
-          npm install
-
-      - name: Build Frontend
-        run: |
-          cd frontend-v1
-          npm run build
