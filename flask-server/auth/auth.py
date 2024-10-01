@@ -1,12 +1,12 @@
 import psycopg2
-from psycopg2 import sql
 from psycopg2.extras import RealDictCursor
 import datetime
 import redis
+import json
 
 class Database:
     def __init__(self):
-        # Initialize the connection to the aegis_db
+        # Initialize the connection to PostgreSQL
         self.conn = psycopg2.connect(
             dbname="aegis_db",
             user="aegis",
@@ -19,13 +19,7 @@ class Database:
         # Redis setup
         self.redis_client = redis.StrictRedis(host="localhost", port=6379, db=0, decode_responses=True)
 
-    def get_redis_client(self):
-        return self.redis_client
-
-    def get_postgres_cursor(self):
-        return self.cursor
-
-    # Method to retrieve a user's API key from the database
+    # Method to retrieve a user's API key from PostgreSQL
     def get_api_key(self, username):
         query = """
         SELECT api_key FROM auth.users WHERE username = %s;
@@ -34,44 +28,23 @@ class Database:
         result = self.cursor.fetchone()
         return result['api_key'] if result else None
 
-    # Method to store a new API key in the database
-    def update_api_key(self, username, api_key):
-        query = """
-        UPDATE auth.users SET api_key = %s WHERE username = %s;
-        """
-        self.cursor.execute(query, (api_key, username))
-        self.conn.commit()
-
-    # Method to check if a username exists in the database
-    def user_exists(self, username):
-        query = """
-        SELECT id FROM auth.users WHERE username = %s;
-        """
-        self.cursor.execute(query, (username,))
-        return self.cursor.fetchone() is not None
-
-    # Method to insert a new chat session in the chat_history schema
     def insert_chat_session(self, session_id, username, chat_history):
         query = """
         INSERT INTO chat_history.sessions (session_id, username, chat_history, created_at, updated_at)
-        VALUES (%s, %s, %s, %s, %s);
+        VALUES (%s, %s, %s, %s, %s)
+        ON CONFLICT (session_id) DO UPDATE 
+        SET chat_history = EXCLUDED.chat_history, updated_at = EXCLUDED.updated_at;
         """
         now = datetime.datetime.utcnow()
+
+        # Ensure that chat_history is in the correct format (e.g., serialized JSON if necessary)
+        if isinstance(chat_history, list):
+            chat_history = json.dumps(chat_history)
+
         self.cursor.execute(query, (session_id, username, chat_history, now, now))
         self.conn.commit()
 
-    # Method to update the chat history for an existing session
-    def update_chat_session(self, session_id, chat_history):
-        query = """
-        UPDATE chat_history.sessions
-        SET chat_history = %s, updated_at = %s
-        WHERE session_id = %s;
-        """
-        now = datetime.datetime.utcnow()
-        self.cursor.execute(query, (chat_history, now, session_id))
-        self.conn.commit()
-
-    # Method to retrieve the chat history for a specific session
+    # Method to retrieve chat history from PostgreSQL
     def get_chat_history(self, session_id):
         query = """
         SELECT chat_history FROM chat_history.sessions WHERE session_id = %s;
@@ -80,53 +53,78 @@ class Database:
         result = self.cursor.fetchone()
         return result['chat_history'] if result else None
 
+    # Method to load chat history from PostgreSQL into Redis (when session becomes active)
     def load_chat_history_to_redis(self, session_id):
         # Fetch chat history from PostgreSQL
-        self.cursor.execute("SELECT chat_history FROM chat_history.sessions WHERE session_id = %s", (session_id,))
-        result = self.cursor.fetchone()
+        chat_history = self.get_chat_history(session_id)
         
-        if result:
-            chat_history = result[0]  # Assuming chat_history is stored as a text or JSONB column
-            # Load into Redis as a list (assuming chat history is a list of messages)
+        if chat_history:
+            # Clear existing Redis session data for a clean load
+            self.redis_client.delete(session_id)
+            
+            # Assuming chat_history is a list of messages
             for message in chat_history:
                 self.redis_client.rpush(session_id, message)
-        else:
-            # Handle case where session_id is not found in the DB
-            print(f"No chat history found for session_id: {session_id}")
+        # else:
+        #     # Handle case where no chat history is found for session_id
+        #     print(f"No chat history found for session_id: {session_id}")
 
+    # Method to store a new message in Redis during an active session
     def store_chat_in_redis(self, session_id, message):
         self.redis_client.rpush(session_id, message)
 
-    def sync_redis_to_postgres(self, session_id):
-        # Fetch chat history from Redis
+    # Sync chat history from Redis to PostgreSQL (e.g., when the session ends)
+    def sync_redis_to_postgres(self, session_id, username):
+        # Fetch the entire chat history from Redis
         chat_history = self.redis_client.lrange(session_id, 0, -1)
 
-        # Update the chat history in PostgreSQL
-        self.cursor.execute("""
-        UPDATE chat_history.sessions 
-        SET chat_history = %s, updated_at = NOW()
-        WHERE session_id = %s;
-        """, (chat_history, session_id))
-        self.conn.commit()
+        if chat_history:
+            # Update the chat history in PostgreSQL (replace old with new)
+            self.insert_chat_session(session_id, username, chat_history)
 
-        # Optionally, clear the Redis session data
+        # Optionally clear the Redis session data after syncing
         self.redis_client.delete(session_id)
 
-    # Close the database connection
+    def fetch_chat_history_from_redis(self, session_id):
+        # Fetch all messages from Redis (list) for the given session_id
+        chat_history = self.redis_client.lrange(session_id, 0, -1)
+        
+        return '\n'.join(chat_history)
+
+    # Method to close the PostgreSQL connection
     def close(self):
         self.cursor.close()
         self.conn.close()
 
-# Sample
+# Sample usage
 if __name__ == "__main__":
     db = Database()
     
-    api_key = db.get_api_key("admin")
-    print(api_key)
+    username = "admin"
+    session_id = 7
+
+    # Fetch and print the API key
+    api_key = db.get_api_key(username)
     
-    db.insert_chat_session("2", "admin", "Hello, this is a new session.")
+    # Load chat history into Redis
+    db.load_chat_history_to_redis(session_id)
+    # # Fetch and print the updated chat history from Redis
+    # chat_history = db.fetch_chat_history_from_redis(session_id)
+    # print(f"2. Chat History: {chat_history}")
+
+    # Store a new message in Redis
+    db.store_chat_in_redis(session_id, "This is another new message in the session.")
     
-    chat_history = db.get_chat_history("2")
-    print(chat_history)
+    # Fetch and print the updated chat history from Redis
+    # chat_history = db.fetch_chat_history_from_redis(session_id)
+    # print(f"3. Chat History: {chat_history}")
+
+    # Sync Redis back to PostgreSQL
+    db.sync_redis_to_postgres(session_id, username)
     
+    # Fetch and print the updated chat history
+    # chat_history = db.get_chat_history("2")
+    # print(f"Chat History: {chat_history}")
+    
+    # Close the database connection
     db.close()
