@@ -1,4 +1,4 @@
-# Flask Server Project
+# Cybersecurity Auditing Chatbot
 
 This project implements a Flask-based Cybersecurity Auditing Generative Application with RAG (Retrieval-Augmented Generation) capabilities using LangChain, Groq, and Ollama embeddings.
 
@@ -76,11 +76,10 @@ Key features:
 
 ## Usage
 
-The server provides API endpoints for:
+The app provides API endpoints for:
 - Generating responses using the RAG system
 - Managing conversation history
 - Handling embeddings and vector store operations
 
-Refer to the API documentation for detailed endpoint information.
 
 
