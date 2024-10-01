@@ -121,6 +121,36 @@ class ChatAgent:
 
         return response_content
     
+    def retrieve_session_from_db(self, session_id):
+        # Fetch the chat history for the given session_id from PostgreSQL
+        self.cursor.execute("""
+            SELECT chat_history FROM auth.chat_sessions WHERE session_id = %s
+        """, (session_id,))
+        result = self.cursor.fetchone()
+        return result[0] if result else None
+
+    def load_chat_history(self, session_id, username):
+        # Fetch chat history from PostgreSQL
+        chat_history = self.retrieve_session_from_db(session_id)
+        
+        if chat_history:
+            # Load chat history into Redis
+            for message in chat_history.split('\n'):
+                self.store_chat_history(session_id, message)
+            
+            # Load chat history into InMemoryChatMessageHistory
+            session_history = self.get_session_history(session_id)
+            for message in chat_history.split('\n'):
+                session_history.add_message(message)
+
+            print(f"Chat history for session {session_id} loaded successfully.")
+        else:
+            print(f"No chat history found for session {session_id}.")
+
+    def activate_session(self, session_id, username):
+        self.load_chat_history(session_id, username)
+        print(f"Session {session_id} for user {username} is now active.")
+
     def fetch_chat_history_from_redis(self, session_id):
         # Fetch all messages from Redis (list) for the given session_id
         chat_history = self.redis_client.lrange(session_id, 0, -1)
