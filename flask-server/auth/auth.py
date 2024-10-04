@@ -1,10 +1,33 @@
 import psycopg2
 from psycopg2.extras import RealDictCursor
-import datetime
-import redis
-import json
+from langchain_groq import ChatGroq
+import re
+from utils.helper_functions import hash_password, verify_password
 
-class Database:
+class Auth:
+    """
+    A class to handle user authentication.
+
+    Attributes
+    ----------
+    conn : psycopg2 connection object
+        A connection object to interact with PostgreSQL.
+    cursor : psycopg2 cursor object
+        A cursor object to perform SQL queries.
+
+    Methods
+    -------
+    get_api_key(username)
+        Retrieves a user's API key from PostgreSQL.
+    store_api_key(username, api_key)
+        Stores or updates a user's API key in PostgreSQL.
+    register_user(username, password)
+        Registers a new user in PostgreSQL.
+    login(username, password)
+        Authenticates a user by verifying their password.
+    close()
+        Closes the database connection.
+    """
     def __init__(self):
         # Initialize the connection to PostgreSQL
         self.conn = psycopg2.connect(
@@ -16,11 +39,20 @@ class Database:
         )
         self.cursor = self.conn.cursor(cursor_factory=RealDictCursor)
 
-        # Redis setup
-        self.redis_client = redis.StrictRedis(host="localhost", port=6379, db=0, decode_responses=True)
-
-    # Method to retrieve a user's API key from PostgreSQL
     def get_api_key(self, username):
+        """
+        Retrieves a user's API key from PostgreSQL.
+
+        Parameters
+        ----------
+        username : str
+            The username of the user.
+
+        Returns
+        -------
+        str or None
+            The API key of the user, or None if the user does not exist.
+        """
         query = """
         SELECT api_key FROM auth.users WHERE username = %s;
         """
@@ -28,103 +60,165 @@ class Database:
         result = self.cursor.fetchone()
         return result['api_key'] if result else None
 
-    def insert_chat_session(self, session_id, username, chat_history):
-        query = """
-        INSERT INTO chat_history.sessions (session_id, username, chat_history, created_at, updated_at)
-        VALUES (%s, %s, %s, %s, %s)
-        ON CONFLICT (session_id) DO UPDATE 
-        SET chat_history = EXCLUDED.chat_history, updated_at = EXCLUDED.updated_at;
+    def store_api_key(self, username, api_key):
         """
-        now = datetime.datetime.utcnow()
+        Stores or updates a user's API key in PostgreSQL.
 
-        # Ensure that chat_history is in the correct format (e.g., serialized JSON if necessary)
-        if isinstance(chat_history, list):
-            chat_history = json.dumps(chat_history)
-
-        self.cursor.execute(query, (session_id, username, chat_history, now, now))
+        Parameters
+        ----------
+        username : str
+            The username of the user.
+        api_key : str
+            The API key to be stored or updated.
+        """
+        query = """
+        UPDATE auth.users 
+        SET api_key = %s 
+        WHERE username = %s;
+        """
+        self.cursor.execute(query, (api_key, username))
         self.conn.commit()
+        print(f"API key for {username} updated successfully.")
 
-    # Method to retrieve chat history from PostgreSQL
-    def get_chat_history(self, session_id):
-        query = """
-        SELECT chat_history FROM chat_history.sessions WHERE session_id = %s;
+    # Method to verify API key by invoking the ChatGroq service
+    def verify_api_key(self, api_key, model_name):
         """
-        self.cursor.execute(query, (session_id,))
+        Verify the provided API key by attempting to invoke the ChatGroq service.
+
+        Parameters:
+        api_key (str): The API key to be verified.
+        model_name (str): The model name to use for the invocation.
+
+        Returns:
+        bool: True if the API key is valid; False otherwise.
+        """
+        try:
+            chat = ChatGroq(groq_api_key=api_key, model_name=model_name)
+            response = chat.invoke("Test message")
+            return True
+        except Exception as e:
+            print(f"API key verification failed: {e}")
+            return False
+
+    def register_user(self, username, password):
+        """
+        Registers a new user in PostgreSQL.
+
+        Parameters
+        ----------
+        username : str
+            The username of the new user.
+        password : str
+            The password of the new user.
+        """
+
+        # Validate the password
+        if not self.is_password_secure(password):
+            print("Error: Password does not meet security standards.")
+            return
+
+        # Hash the password
+        hashed_password = hash_password(password)
+
+        query = """
+        INSERT INTO auth.users (username, password) VALUES (%s, %s);
+        """
+        try:
+            self.cursor.execute(query, (username, hashed_password))  # Ensure you hash passwords in production!
+            self.conn.commit()
+            print(f"User {username} registered successfully.")
+        except psycopg2.errors.UniqueViolation:
+            print(f"Error: Username '{username}' already exists.")
+            self.conn.rollback()  # Rollback the transaction in case of an error
+        except psycopg2.Error as e:
+            print(f"Error registering user {username}: {e}")
+
+    def is_password_secure(self, password):
+            """
+            Validates the password against security standards.
+
+            Parameters
+            ----------
+            password : str
+                The password to validate.
+
+            Returns
+            -------
+            bool
+                True if the password is secure, False otherwise.
+            """
+            # Define password security criteria
+            min_length = 8
+            has_uppercase = re.search(r'[A-Z]', password) is not None
+            has_lowercase = re.search(r'[a-z]', password) is not None
+            has_digit = re.search(r'\d', password) is not None
+            has_special_char = re.search(r'[!@#$%^&*(),.?":{}|<>]', password) is not None
+
+            # Check password length and criteria
+            return (len(password) >= min_length and 
+                    has_uppercase and 
+                    has_lowercase and 
+                    has_digit and 
+                    has_special_char)
+
+    def login(self, username, provided_password):
+        """
+        Authenticates a user by verifying their password.
+
+        Parameters
+        ----------
+        username : str
+            The username of the user.
+        password : str
+            The password of the user.
+
+        Returns
+        -------
+        bool
+            True if login is successful, False otherwise.
+        """
+        query = """
+        SELECT password FROM auth.users WHERE username = %s;
+        """
+        self.cursor.execute(query, (username,))
         result = self.cursor.fetchone()
-        return result['chat_history'] if result else None
-
-    # Method to load chat history from PostgreSQL into Redis (when session becomes active)
-    def load_chat_history_to_redis(self, session_id):
-        # Fetch chat history from PostgreSQL
-        chat_history = self.get_chat_history(session_id)
         
-        if chat_history:
-            # Clear existing Redis session data for a clean load
-            self.redis_client.delete(session_id)
-            
-            # Assuming chat_history is a list of messages
-            for message in chat_history:
-                self.redis_client.rpush(session_id, message)
-        # else:
-        #     # Handle case where no chat history is found for session_id
-        #     print(f"No chat history found for session_id: {session_id}")
+        if result and verify_password(result['password'], provided_password):
+            print("Login successful!")
+            return True
+        else:
+            print("Login failed: Invalid username or password.")
+            return False
 
-    # Method to store a new message in Redis during an active session
-    def store_chat_in_redis(self, session_id, message):
-        self.redis_client.rpush(session_id, message)
-
-    # Sync chat history from Redis to PostgreSQL (e.g., when the session ends)
-    def sync_redis_to_postgres(self, session_id, username):
-        # Fetch the entire chat history from Redis
-        chat_history = self.redis_client.lrange(session_id, 0, -1)
-
-        if chat_history:
-            # Update the chat history in PostgreSQL (replace old with new)
-            self.insert_chat_session(session_id, username, chat_history)
-
-        # Optionally clear the Redis session data after syncing
-        self.redis_client.delete(session_id)
-
-    def fetch_chat_history_from_redis(self, session_id):
-        # Fetch all messages from Redis (list) for the given session_id
-        chat_history = self.redis_client.lrange(session_id, 0, -1)
-        
-        return '\n'.join(chat_history)
-
-    # Method to close the PostgreSQL connection
     def close(self):
+        """Closes the PostgreSQL connection."""
         self.cursor.close()
         self.conn.close()
 
-# Sample usage
+# Testing the Auth class functionality
 if __name__ == "__main__":
-    db = Database()
+    auth = Auth()
     
-    username = "admin"
-    session_id = 7
+    # Register a new user
+    auth.register_user("new12", "Sabd.02")  # Replace with hashed password in production
 
-    # Fetch and print the API key
-    api_key = db.get_api_key(username)
-    
-    # Load chat history into Redis
-    db.load_chat_history_to_redis(session_id)
-    # # Fetch and print the updated chat history from Redis
-    # chat_history = db.fetch_chat_history_from_redis(session_id)
-    # print(f"2. Chat History: {chat_history}")
+    # Login with the registered user
+    auth.login("new", "securepassword")
 
-    # Store a new message in Redis
-    db.store_chat_in_redis(session_id, "This is another new message in the session.")
-    
-    # Fetch and print the updated chat history from Redis
-    # chat_history = db.fetch_chat_history_from_redis(session_id)
-    # print(f"3. Chat History: {chat_history}")
+    # Retrieve API key
+    api_key = auth.get_api_key("user")
+    print(f"API Key: {api_key}")
 
-    # Sync Redis back to PostgreSQL
-    db.sync_redis_to_postgres(session_id, username)
+    # Store an API key
+    auth.store_api_key("new_user1", "example_api_key")
+
+    # Verifying an API key
+    model_name = "Llama"
     
-    # Fetch and print the updated chat history
-    # chat_history = db.get_chat_history("2")
-    # print(f"Chat History: {chat_history}")
-    
+    if auth.verify_api_key(api_key, model_name):
+        print("API key is valid.")
+    else:
+        print("Invalid API key.")
+
     # Close the database connection
-    db.close()
+    auth.close()
