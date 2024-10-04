@@ -1,5 +1,3 @@
-from flask import Blueprint
+from .rag import RAG
 
-api = Blueprint('api', __name__)
-
-from . import routes
+__all__ = ['RAG']

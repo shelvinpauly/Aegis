@@ -2,7 +2,8 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 from langchain_groq import ChatGroq
 import re
-from utils.helper_functions import hash_password, verify_password
+from db.db import Database
+from utils.utils import hash_password, verify_password
 
 class Auth:
     """
@@ -118,13 +119,13 @@ class Auth:
             return
 
         # Hash the password
-        hashed_password = hash_password(password)
+        # hashed_password = hash_password(password)
 
         query = """
         INSERT INTO auth.users (username, password) VALUES (%s, %s);
         """
         try:
-            self.cursor.execute(query, (username, hashed_password))  # Ensure you hash passwords in production!
+            self.cursor.execute(query, (username, password))  # Ensure you hash passwords in production!
             self.conn.commit()
             print(f"User {username} registered successfully.")
         except psycopg2.errors.UniqueViolation:
@@ -183,7 +184,8 @@ class Auth:
         self.cursor.execute(query, (username,))
         result = self.cursor.fetchone()
         
-        if result and verify_password(result['password'], provided_password):
+        # if result and verify_password(result['password'], provided_password):
+        if result and result['password'] == provided_password:
             print("Login successful!")
             return True
         else:
