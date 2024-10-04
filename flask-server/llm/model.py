@@ -16,7 +16,7 @@ class ChatAgent:
 
         # Initialize connection to PostgreSQL
         self.conn = psycopg2.connect(
-            dbname="aegis_auth",
+            dbname="aegis_db",
             user="aegis",
             password="aegis_pwd",
             host="localhost",
@@ -120,12 +120,75 @@ class ChatAgent:
         self.store_chat_history(session_id, f"Bot: {response_content}")
 
         return response_content
+    
+    def retrieve_session_from_db(self, session_id):
+        # Fetch the chat history for the given session_id from PostgreSQL
+        self.cursor.execute("""
+            SELECT chat_history FROM auth.chat_sessions WHERE session_id = %s
+        """, (session_id,))
+        result = self.cursor.fetchone()
+        return result[0] if result else None
+
+    def load_chat_history(self, session_id, username):
+        # Fetch chat history from PostgreSQL
+        chat_history = self.retrieve_session_from_db(session_id)
+        
+        if chat_history:
+            # Load chat history into Redis
+            for message in chat_history.split('\n'):
+                self.store_chat_history(session_id, message)
+            
+            # Load chat history into InMemoryChatMessageHistory
+            session_history = self.get_session_history(session_id)
+            for message in chat_history.split('\n'):
+                session_history.add_message(message)
+
+            print(f"Chat history for session {session_id} loaded successfully.")
+        else:
+            print(f"No chat history found for session {session_id}.")
+
+    def activate_session(self, session_id, username):
+        self.load_chat_history(session_id, username)
+        print(f"Session {session_id} for user {username} is now active.")
+
+    def fetch_chat_history_from_redis(self, session_id):
+        # Fetch all messages from Redis (list) for the given session_id
+        chat_history = self.redis_client.lrange(session_id, 0, -1)
+        
+        return '\n'.join(chat_history)
+    
+    def store_session_in_db(self, session_id, username):
+        # Fetch chat history from Redis
+        chat_history = self.fetch_chat_history_from_redis(session_id)
+        
+        # Insert the chat history into the PostgreSQL table
+        self.cursor.execute("""
+            INSERT INTO chat_history.sessions (session_id, username, chat_history)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (session_id) 
+            DO UPDATE SET 
+                chat_history = EXCLUDED.chat_history,
+                updated_at = NOW();
+        """, (session_id, username, chat_history))
+        
+        # Commit the transaction
+        self.conn.commit()
+        
+        # Deletes the session from Redis after storing in PostgreSQL
+        self.redis_client.delete(session_id)
+
+    def mark_session_inactive(self, session_id, username):
+        # Store the session history in PostgreSQL
+        self.store_session_in_db(session_id, username)
+        
+        print(f"Session {session_id} for user {username} has been stored in PostgreSQL and removed from Redis.")
+
 
 # Initialize ChatAgent with username
 agent = ChatAgent("admin")
 
 # Loop to hold the conversation
-session_id = "user_session_1"  # You can use a unique ID for different sessions
+session_id = "1"  # You can use a unique ID for different sessions
 while True:
     user_input = agent.get_user_input("Enter your prompt (or type 'exit' to quit): ")
     
@@ -137,3 +200,4 @@ while True:
     # Process user input and generate response
     response = agent.process_user_input(user_input, session_id=session_id)
     print(response)
+agent.mark_session_inactive(session_id, "admin")
