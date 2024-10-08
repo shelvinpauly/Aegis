@@ -1,4 +1,3 @@
-from embedding_service import EmbeddingsService
+from .embedding_service import EmbeddingsService
 
-api = EmbeddingsService('api', __name__)
-
+__all__ = ['EmbeddingsService']
